@@ -12,7 +12,7 @@
   // Bump this whenever autoload.js changes so you can confirm the deployed
   // build is the latest one (shown in the corner of the loader overlay and
   // logged to the console).
-  var LOADER_VERSION = 'v2';
+  var LOADER_VERSION = 'v3';
   console.log('Diablo loader ' + LOADER_VERSION);
 
   var PART_BASE = '/Diablo/cdn.pvpgn.pro/diablo1/DIABDAT.MPQ.part';
@@ -58,6 +58,14 @@
   // peak memory and caused "Array buffer allocation failed").
   function injectMpq(parts) {
     var file = new File(parts, 'DIABDAT.MPQ', { type: 'application/octet-stream' });
+    // The Blob copies the chunk data into its own storage, so the caller's
+    // array entries are now redundant. Release them before the engine reads the
+    // File (it uses FileReader.readAsArrayBuffer, allocating another full copy);
+    // otherwise both copies coexist and peak memory ~doubles, which surfaces as
+    // NotReadableError when the read allocation fails.
+    if (parts && parts.length) {
+      for (var k = 0; k < parts.length; k++) parts[k] = null;
+    }
     var dt = new DataTransfer();
     dt.items.add(file);
     var ev = new Event('drop', { bubbles: true, cancelable: true });
