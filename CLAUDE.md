@@ -27,8 +27,14 @@ Play **Diablo 1** in the browser using the user's own game files, hosted on this
   - Reassembly order: `part00` → `part05`.
 - The original `DIABDAT.MPQ` is git-ignored (too big to commit).
 
-## TODO (next steps)
+## Web app (implemented)
 
-1. Add the DiabloWeb static app (prebuilt engine from `d07RiV/diabloweb` gh-pages, with asset paths rebased from `/diabloweb/` to `/Diablo/`).
-2. Modify the app to fetch the `DIABDAT.MPQ.part*` chunks, concatenate them, and feed the result to the engine instead of using the local file picker.
-3. Enable GitHub Pages on `main` and verify the game boots end-to-end.
+- **Engine:** Prebuilt DiabloWeb (DevilutionX WASM) vendored from `d07RiV/diabloweb` `gh-pages`. Asset base path rebased from `/diabloweb/` to `/Diablo/` (project-site path). Source maps + service worker stripped to avoid stale caching. `node-sass` won't build on Node 22, so building from source is not viable — we patch the prebuilt bundle instead.
+- **Chunk loader:** `autoload.js` shows an overlay with a "Play Diablo (Retail)" button. On click it fetches the 6 `DIABDAT.MPQ.part*` chunks from `/Diablo/cdn.pvpgn.pro/diablo1/`, reassembles them into one `Uint8Array` in memory, wraps it in a `File('DIABDAT.MPQ')`, and dispatches a synthetic `drop` event. The engine's existing `App.onDrop` (a plain `document` listener, not a React synthetic event) picks it up and launches retail. A "Play Shareware" fallback uses the bundled `spawn.mpq`.
+- **Deploy:** `.github/workflows/pages.yml` deploys the whole repo to GitHub Pages on every push to `main`, using `actions/configure-pages@v5` with `enablement: true` so Pages turns on automatically (no manual Settings toggle).
+- **Live URL (after first successful workflow run):** https://knightdx91-alt.github.io/Diablo/
+
+## Notes / caveats
+
+- Reassembling ~517 MB lives in a single tab's memory (~1 GB peak during assembly). Fine on desktop; may be heavy on phones/tablets.
+- First load downloads the full ~517 MB; the engine caches game files in IndexedDB afterward.
