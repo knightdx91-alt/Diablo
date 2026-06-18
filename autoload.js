@@ -9,6 +9,12 @@
  * "drop" event the engine already listens for (see App.onDrop / App.start).
  */
 (function () {
+  // Bump this whenever autoload.js changes so you can confirm the deployed
+  // build is the latest one (shown in the corner of the loader overlay and
+  // logged to the console).
+  var LOADER_VERSION = 'v2';
+  console.log('Diablo loader ' + LOADER_VERSION);
+
   var PART_BASE = '/Diablo/cdn.pvpgn.pro/diablo1/DIABDAT.MPQ.part';
   var PART_COUNT = 6;
 
@@ -31,6 +37,7 @@
     '<button id="gh-play" style="font:bold 20px \'Times New Roman\',serif;color:#000;background:#c9a227;border:none;padding:14px 40px;cursor:pointer;border-radius:4px">▶ Play Diablo (Retail)</button>' +
     '<button id="gh-shareware" style="margin-top:12px;font:14px \'Times New Roman\',serif;color:#c9a227;background:none;border:1px solid #c9a227;padding:8px 20px;cursor:pointer;border-radius:4px">Play Shareware instead</button>' +
     '<div id="gh-status" style="margin-top:24px;min-height:20px;opacity:.85"></div>' +
+    '<div style="position:fixed;bottom:8px;right:10px;font-size:12px;opacity:.5">' + LOADER_VERSION + '</div>' +
     '<div style="width:420px;max-width:80vw;height:14px;background:#222;border:1px solid #555;border-radius:7px;margin-top:10px;overflow:hidden">' +
       '<div id="gh-bar" style="height:100%;width:0;background:#b71c1c;transition:width .2s"></div>' +
     '</div>';
