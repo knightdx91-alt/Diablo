@@ -45,8 +45,12 @@
   function setProgress(frac) { barEl.style.width = (frac * 100).toFixed(1) + '%'; }
 
   // ---- Inject a File into the engine via its existing drop handler ----------
-  function injectMpq(bytes) {
-    var file = new File([bytes], 'DIABDAT.MPQ', { type: 'application/octet-stream' });
+  // `parts` is an array of Uint8Array/ArrayBuffer chunks. We pass them straight
+  // to the File constructor so the browser concatenates them off-heap, instead
+  // of first building one giant ~517 MB Uint8Array ourselves (which doubled
+  // peak memory and caused "Array buffer allocation failed").
+  function injectMpq(parts) {
+    var file = new File(parts, 'DIABDAT.MPQ', { type: 'application/octet-stream' });
     var dt = new DataTransfer();
     dt.items.add(file);
     var ev = new Event('drop', { bubbles: true, cancelable: true });
@@ -84,16 +88,13 @@
 
     fetchPart(0).then(function () {
       setStatus('Assembling ' + (loadedBytes / 1048576).toFixed(0) + ' MB…');
-      var mpq = new Uint8Array(loadedBytes);
-      var off = 0;
-      for (var i = 0; i < PART_COUNT; i++) {
-        mpq.set(buffers[i], off);
-        off += buffers[i].length;
-        buffers[i] = null; // free as we go
-      }
       setProgress(1);
       setStatus('Launching…');
-      injectMpq(mpq);
+      // Hand the chunks straight to the File constructor. We deliberately do NOT
+      // copy them into one big Uint8Array first: that extra full-size allocation
+      // roughly doubled peak memory and triggered "Array buffer allocation
+      // failed" on memory-constrained devices.
+      injectMpq(buffers);
       // Fade the overlay so the game canvas (rendered by the engine) shows.
       setTimeout(function () {
         overlay.style.transition = 'opacity .6s';
