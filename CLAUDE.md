@@ -27,14 +27,24 @@ Play **Diablo 1** in the browser using the user's own game files, hosted on this
   - Reassembly order: `part00` → `part05`.
 - The original `DIABDAT.MPQ` is git-ignored (too big to commit).
 
-## Web app (implemented)
+## Web app (implemented — streaming rebuild)
 
-- **Engine:** Prebuilt DiabloWeb (DevilutionX WASM) vendored from `d07RiV/diabloweb` `gh-pages`. Asset base path rebased from `/diabloweb/` to `/Diablo/` (project-site path). Source maps + service worker stripped to avoid stale caching. `node-sass` won't build on Node 22, so building from source is not viable — we patch the prebuilt bundle instead.
-- **Chunk loader:** `autoload.js` shows an overlay with a "Play Diablo (Retail)" button. On click it fetches the 6 `DIABDAT.MPQ.part*` chunks from `/Diablo/cdn.pvpgn.pro/diablo1/`, reassembles them into one `Uint8Array` in memory, wraps it in a `File('DIABDAT.MPQ')`, and dispatches a synthetic `drop` event. The engine's existing `App.onDrop` (a plain `document` listener, not a React synthetic event) picks it up and launches retail. A "Play Shareware" fallback uses the bundled `spawn.mpq`.
-- **Deploy:** `.github/workflows/pages.yml` deploys the whole repo to GitHub Pages on every push to `main`, using `actions/configure-pages@v5` with `enablement: true` so Pages turns on automatically (no manual Settings toggle).
-- **Live URL (after first successful workflow run):** https://knightdx91-alt.github.io/Diablo/
+- **Engine:** DiabloWeb (DevilutionX WASM) **built from source** (`d07RiV/diabloweb`), not the prebuilt gh-pages bundle. The committed `.wasm` engine binaries are reused as-is (no Emscripten/C++ compile needed); only the JS frontend is rebuilt. The build is vendored into the repo root and served from `/Diablo/`.
+- **Why we rebuild now:** the old prebuilt bundle loaded the whole MPQ into one in-memory buffer, which (a) doubled peak memory during assembly and (b) required a single ~517 MB `ArrayBuffer`. On phones/tablets that allocation simply fails (`Array buffer allocation failed`, then `NotReadableError` from the engine's `FileReader`). No amount of loader tweaking fixes it — the fix is to **never hold the whole file at once**.
+- **Build notes (Node 22):**
+  - `node-sass` → swapped for `sass` (dart-sass, pure JS) via `implementation: require('sass')` in `config/webpack.config.js`. Only one SCSS file (`App.scss`).
+  - `peerjs` pinned to `1.3.2` (newer 1.5.x uses private class fields webpack 4 can't parse).
+  - Build with `NODE_OPTIONS=--openssl-legacy-provider CI=false npm run build`.
+  - `homepage` set to `https://knightdx91-alt.github.io/Diablo` so `PUBLIC_URL=/Diablo`.
+- **Streaming (`RemoteFile` in `src/api/game.worker.js`):** rewritten to stream the MPQ via HTTP **Range requests**, keeping only a bounded **LRU window of 1 MB chunks** resident (`MaxCachedChunks`, ~192 MB ceiling). It presents the **6 committed `DIABDAT.MPQ.part0X` files** under `/Diablo/cdn.pvpgn.pro/diablo1/` as one contiguous virtual file (sizes discovered via `HEAD`; ranges split across parts; handles 206 and 200-fallback). The engine's `DApi` file interface (`get_file_size` + `subarray`) is already byte-range based, so it reads on demand — never the full 517 MB.
+- **Retail entry point:** `App.start(null, true)` triggers remote retail (no local file). `init_game` with no `mpq` builds the part-URL list and uses `RemoteFile`. UI has a **"Play Diablo (Retail)"** button (streams), plus the original Select-MPQ and Play-Shareware paths. Shareware streams single-file `spawn.mpq`.
+- **Service worker:** disabled at source (`src/index.js` calls `serviceWorker.unregister()`), and `service-worker.js`/`precache-manifest*` are not deployed. This avoids the stale-cache traps we hit repeatedly. Source maps also not deployed.
+- **Deploy:** `.github/workflows/pages.yml` deploys the whole repo to GitHub Pages on every push to `main` (`actions/configure-pages@v5`, `enablement: true`).
+- **Live URL:** https://knightdx91-alt.github.io/Diablo/
 
 ## Notes / caveats
 
-- Reassembling ~517 MB lives in a single tab's memory (~1 GB peak during assembly). Fine on desktop; may be heavy on phones/tablets.
-- First load downloads the full ~517 MB; the engine caches game files in IndexedDB afterward.
+- Memory is now bounded (~192 MB worst case), so retail works on phones/tablets. No upfront 517 MB allocation.
+- Requires the host to serve HTTP Range requests. GitHub Pages (Fastly) returns `206`; if a host ignores Range and returns `200`, `RemoteFile` falls back to slicing the full part (correct but bandwidth-heavy).
+- First access to each region of the MPQ incurs a network fetch (synchronous XHR in the worker); subsequent reads hit the chunk cache. Slight hitches possible on first entry to a new area.
+- The original `DIABDAT.MPQ` is git-ignored. The 6 part files are committed under `cdn.pvpgn.pro/diablo1/` (the duplicate root-level `DIABDAT.MPQ.part0X` copies were removed; streaming uses the `cdn.pvpgn.pro` copies).
